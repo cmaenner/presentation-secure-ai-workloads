@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "name": "keynote-slides",
+  "owner": "dbmcco",
+  "repo": "claude-agent-toolkit",
+  "path": "skills/keynote-slides",
+  "branch": "main",
+  "sha": "2a6b3da71b15896517ee77fe099d53b32b848ceb",
+  "source": "manual"
+}

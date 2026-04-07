@@ -1,0 +1,1047 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Securing AI Workloads in Kubernetes</title>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap");
+
+      :root {
+        --brand-ink: #09090B;
+        --brand-ink-soft: #18181B;
+        --brand-paper: #FAFAFA;
+        --brand-paper-deep: #F4F4F5;
+        --brand-accent: #3B82F6;
+        --brand-accent-strong: #2563EB;
+        --brand-sage: #10B981;
+        --brand-slate: #71717A;
+        --brand-line: rgba(9,9,11,0.12);
+        --brand-glow: rgba(59,130,246,0.35);
+        --brand-danger: #EF4444;
+        --brand-warning: #F59E0B;
+        --brand-success: #10B981;
+        --font-display: 'Nunito Sans', sans-serif;
+        --font-body: 'Nunito Sans', sans-serif;
+        --font-mono: 'JetBrains Mono', monospace;
+        --slide-radius: 24px;
+        --slide-shadow: 0 24px 60px rgba(9,9,11,0.22);
+        --slide-border: 1px solid rgba(9,9,11,0.06);
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: var(--font-body);
+        color: var(--brand-ink);
+        background: #09090B;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 4vh 3vw 10vh;
+      }
+
+      .deck {
+        position: relative;
+        width: min(1200px, 94vw);
+        height: min(720px, 74vh);
+      }
+
+      .slide {
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+        transform: translateY(10px) scale(0.988);
+        transition: opacity 0.45s ease, transform 0.45s ease;
+        pointer-events: none;
+      }
+
+      .slide.is-active {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+        pointer-events: auto;
+      }
+
+      .slide-inner {
+        height: 100%;
+        border-radius: var(--slide-radius);
+        box-shadow: var(--slide-shadow);
+        border: var(--slide-border);
+        padding: clamp(32px, 4vw, 56px);
+        display: grid;
+        gap: clamp(14px, 2vh, 24px);
+        overflow: hidden;
+      }
+
+      /* Light theme (default) */
+      .theme-light .slide-inner {
+        background: var(--brand-paper);
+        color: var(--brand-ink);
+      }
+
+      /* Dark theme */
+      .theme-ink .slide-inner {
+        background: var(--brand-ink-soft);
+        color: #FAFAFA;
+        border: 1px solid rgba(255,255,255,0.06);
+      }
+
+      .theme-ink .subtitle,
+      .theme-ink .body-text,
+      .theme-ink .card-caption,
+      .theme-ink .metric-label,
+      .theme-ink .quote-meta {
+        color: rgba(250,250,250,0.72);
+      }
+
+      .theme-ink .chip,
+      .theme-ink .card,
+      .theme-ink .metric {
+        border-color: rgba(255,255,255,0.1);
+        background: rgba(255,255,255,0.04);
+      }
+
+      .theme-ink code {
+        background: rgba(255,255,255,0.08);
+        color: #93C5FD;
+      }
+
+      /* Accent theme — blue hero slides */
+      .theme-accent .slide-inner {
+        background: linear-gradient(135deg, #1E3A5F 0%, #0F172A 100%);
+        color: #FAFAFA;
+        border: 1px solid rgba(59,130,246,0.15);
+      }
+
+      .theme-accent .eyebrow { color: #93C5FD; }
+      .theme-accent .subtitle,
+      .theme-accent .body-text { color: rgba(250,250,250,0.78); }
+      .theme-accent .chip { border-color: rgba(59,130,246,0.2); background: rgba(59,130,246,0.1); }
+      .theme-accent .card { border-color: rgba(59,130,246,0.15); background: rgba(59,130,246,0.06); }
+
+      /* Danger theme — red-tinted for insecure/risk slides */
+      .theme-danger .slide-inner {
+        background: linear-gradient(135deg, #450a0a 0%, #0F172A 100%);
+        color: #FAFAFA;
+        border: 1px solid rgba(239,68,68,0.15);
+      }
+
+      .theme-danger .eyebrow { color: #FCA5A5; }
+      .theme-danger .subtitle,
+      .theme-danger .body-text { color: rgba(250,250,250,0.78); }
+      .theme-danger .chip { border-color: rgba(239,68,68,0.2); background: rgba(239,68,68,0.1); color: #FCA5A5; }
+      .theme-danger .card { border-color: rgba(239,68,68,0.15); background: rgba(239,68,68,0.06); }
+
+      /* Success theme — green-tinted for secure/solution slides */
+      .theme-success .slide-inner {
+        background: linear-gradient(135deg, #052e16 0%, #0F172A 100%);
+        color: #FAFAFA;
+        border: 1px solid rgba(16,185,129,0.15);
+      }
+
+      .theme-success .eyebrow { color: #6EE7B7; }
+      .theme-success .subtitle,
+      .theme-success .body-text { color: rgba(250,250,250,0.78); }
+      .theme-success .chip { border-color: rgba(16,185,129,0.2); background: rgba(16,185,129,0.1); color: #6EE7B7; }
+      .theme-success .card { border-color: rgba(16,185,129,0.15); background: rgba(16,185,129,0.06); }
+
+      /* Layout systems */
+      .layout-title { align-content: center; grid-template-rows: auto; }
+      .layout-split { grid-template-columns: 1.15fr 0.85fr; align-items: center; }
+      .layout-grid { grid-template-columns: repeat(3, minmax(0,1fr)); align-content: start; }
+      .layout-metrics { grid-template-columns: repeat(3, minmax(0,1fr)); align-content: center; }
+      .layout-2col { grid-template-columns: repeat(2, minmax(0,1fr)); align-content: start; gap: 20px; }
+      .layout-quote { align-content: center; text-align: center; }
+      .layout-list { align-content: start; grid-template-rows: auto; }
+
+      .full-span { grid-column: 1 / -1; }
+
+      /* Typography */
+      .eyebrow {
+        text-transform: uppercase;
+        letter-spacing: 0.2em;
+        font-size: 0.72rem;
+        font-weight: 600;
+        color: var(--brand-accent);
+      }
+
+      .title {
+        font-family: var(--font-display);
+        font-size: clamp(2.4rem, 4.8vw, 3.8rem);
+        font-weight: 700;
+        line-height: 1.1;
+        margin: 0;
+      }
+
+      .subtitle {
+        font-size: clamp(1rem, 1.5vw, 1.25rem);
+        line-height: 1.55;
+        margin: 0;
+        color: var(--brand-slate);
+        max-width: 72%;
+      }
+
+      .section-title {
+        font-family: var(--font-display);
+        font-size: clamp(1.8rem, 3.2vw, 2.6rem);
+        font-weight: 700;
+        margin: 0;
+        line-height: 1.15;
+      }
+
+      .body-text {
+        font-size: 1.05rem;
+        line-height: 1.6;
+        color: var(--brand-slate);
+      }
+
+      .body-text ul {
+        padding-left: 1.4em;
+        margin: 0.5em 0;
+      }
+
+      .body-text li {
+        margin-bottom: 0.45em;
+        line-height: 1.5;
+      }
+
+      code {
+        font-family: var(--font-mono);
+        font-size: 0.88em;
+        padding: 2px 7px;
+        border-radius: 6px;
+        background: var(--brand-paper-deep);
+      }
+
+      pre {
+        font-family: var(--font-mono);
+        font-size: 0.78rem;
+        line-height: 1.55;
+        background: #0F172A;
+        color: #E2E8F0;
+        padding: 16px 20px;
+        border-radius: 14px;
+        overflow-x: auto;
+        margin: 0;
+        border: 1px solid rgba(255,255,255,0.06);
+      }
+
+      pre .comment { color: #64748B; }
+      pre .keyword { color: #93C5FD; }
+      pre .string { color: #6EE7B7; }
+      pre .number { color: #FCD34D; }
+
+      /* Components */
+      .chip-row { display: flex; flex-wrap: wrap; gap: 10px; }
+
+      .chip {
+        padding: 7px 14px;
+        border-radius: 999px;
+        border: 1px solid var(--brand-line);
+        font-size: 0.82rem;
+        font-weight: 500;
+        background: rgba(255,255,255,0.6);
+      }
+
+      .card {
+        border-radius: 16px;
+        border: 1px solid var(--brand-line);
+        padding: 18px;
+        background: rgba(255,255,255,0.55);
+        display: grid;
+        gap: 8px;
+      }
+
+      .card-icon {
+        font-size: 1.8rem;
+        margin-bottom: 4px;
+      }
+
+      .card-title {
+        font-weight: 600;
+        font-size: 1rem;
+      }
+
+      .card-caption {
+        font-size: 0.88rem;
+        color: var(--brand-slate);
+        line-height: 1.5;
+      }
+
+      .metric {
+        border: 1px solid var(--brand-line);
+        border-radius: 16px;
+        padding: 20px;
+        text-align: left;
+        background: rgba(255,255,255,0.55);
+      }
+
+      .metric-number {
+        font-family: var(--font-display);
+        font-size: 2.2rem;
+        font-weight: 700;
+        margin-bottom: 6px;
+      }
+
+      .metric-label {
+        font-size: 0.88rem;
+        color: var(--brand-slate);
+        line-height: 1.4;
+      }
+
+      .quote {
+        font-family: var(--font-display);
+        font-size: clamp(1.8rem, 3.2vw, 2.8rem);
+        font-weight: 700;
+        line-height: 1.2;
+        margin: 0;
+      }
+
+      .quote-meta {
+        margin-top: 16px;
+        font-size: 0.92rem;
+        color: var(--brand-slate);
+      }
+
+      /* SVG diagrams */
+      .diagram-container {
+        display: grid;
+        place-items: center;
+        padding: 8px;
+      }
+
+      .diagram {
+        width: 100%;
+        max-height: 400px;
+      }
+
+      /* Status indicators */
+      .status-ok { color: var(--brand-success); }
+      .status-warn { color: var(--brand-warning); }
+      .status-fail { color: var(--brand-danger); }
+      .accent-text { color: var(--brand-accent); }
+
+      .badge {
+        display: inline-block;
+        padding: 3px 10px;
+        border-radius: 999px;
+        font-size: 0.72rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+      .badge-danger { background: rgba(239,68,68,0.15); color: #FCA5A5; }
+      .badge-success { background: rgba(16,185,129,0.15); color: #6EE7B7; }
+      .badge-info { background: rgba(59,130,246,0.15); color: #93C5FD; }
+
+      /* Reveal animations */
+      .reveal {
+        opacity: 0;
+        transform: translateY(14px);
+        transition: opacity 0.5s ease, transform 0.5s ease;
+      }
+
+      .is-active .reveal {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      .reveal.d1 { transition-delay: 0.15s; }
+      .reveal.d2 { transition-delay: 0.3s; }
+      .reveal.d3 { transition-delay: 0.45s; }
+      .reveal.d4 { transition-delay: 0.6s; }
+      .reveal.d5 { transition-delay: 0.75s; }
+
+      /* Accent line micro animation */
+      .accent-line {
+        display: block;
+        width: 80px;
+        height: 3px;
+        background: var(--brand-accent);
+        border-radius: 999px;
+        transform: scaleX(0);
+        transform-origin: left;
+        transition: transform 0.8s ease-out;
+      }
+
+      .accent-line.long { width: 120px; }
+
+      .is-active .accent-line {
+        transform: scaleX(1);
+        animation: accent-pulse 4s ease-in-out 0.8s infinite;
+      }
+
+      @keyframes accent-pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.6; }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .reveal { transition: none; opacity: 1; transform: none; }
+        .accent-line { transform: scaleX(1); animation: none; }
+      }
+
+      /* Speaker notes */
+      .slide-notes { display: none; }
+
+      .notes-panel {
+        position: fixed;
+        right: 3vw;
+        bottom: 9vh;
+        width: min(380px, 90vw);
+        background: rgba(15,23,42,0.95);
+        color: #E2E8F0;
+        border-radius: 16px;
+        padding: 18px;
+        border: 1px solid rgba(255,255,255,0.1);
+        box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+        display: none;
+        gap: 10px;
+        font-size: 0.88rem;
+        line-height: 1.55;
+        max-height: 50vh;
+        overflow-y: auto;
+      }
+
+      .notes-panel.is-open { display: grid; }
+      .notes-panel-title { font-size: 0.75rem; color: rgba(250,250,250,0.5); text-transform: uppercase; letter-spacing: 0.15em; }
+
+      /* Navigation */
+      .deck-nav {
+        position: fixed;
+        bottom: 3vh;
+        right: 3vw;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 14px;
+        border-radius: 999px;
+        background: rgba(15,23,42,0.85);
+        color: #E2E8F0;
+        font-size: 0.82rem;
+        border: 1px solid rgba(255,255,255,0.08);
+        backdrop-filter: blur(12px);
+      }
+
+      .deck-nav button {
+        border: none;
+        background: rgba(255,255,255,0.08);
+        color: inherit;
+        padding: 6px 10px;
+        border-radius: 999px;
+        cursor: pointer;
+        font-family: var(--font-body);
+        font-size: 0.8rem;
+      }
+
+      .deck-nav button:hover { background: rgba(255,255,255,0.16); }
+
+      .progress {
+        width: 100px;
+        height: 3px;
+        background: rgba(255,255,255,0.1);
+        border-radius: 999px;
+        overflow: hidden;
+      }
+
+      .progress-bar {
+        height: 100%;
+        background: var(--brand-accent);
+        width: 0%;
+        transition: width 0.3s ease;
+      }
+
+      /* Print styles */
+      @media print {
+        body { background: white; padding: 0; }
+        .deck { width: 100%; height: auto; }
+        .slide {
+          position: relative;
+          opacity: 1;
+          transform: none;
+          pointer-events: auto;
+          page-break-after: always;
+          margin-bottom: 20px;
+        }
+        .deck-nav, .notes-panel { display: none !important; }
+      }
+    </style>
+  </head>
+  <body>
+    <main id="deck" class="deck">
+
+      <!-- ============================================================ -->
+      <!-- SLIDE 1 — Title -->
+      <!-- ============================================================ -->
+      <section class="slide theme-ink" data-title="title">
+        <div class="slide-inner layout-title" style="text-align:center; justify-items:center;">
+          <p class="eyebrow reveal">BSides Charm 2025</p>
+          <h1 class="title reveal d1" style="max-width:90%;">Securing AI Workloads<br>in Kubernetes</h1>
+          <span class="accent-line long reveal d2" style="margin:0 auto;"></span>
+          <p class="subtitle reveal d3" style="max-width:60%; text-align:center;">Lessons from Scaling Startups</p>
+          <div class="chip-row reveal d4" style="justify-content:center;">
+            <span class="chip">Chris Maenner</span>
+            <span class="chip">Platform Engineering</span>
+          </div>
+        </div>
+        <aside class="slide-notes">Quick intro — keep it human, not resume-heavy. Establish credibility by connecting to the audience: you've been in their shoes, building fast, securing later.</aside>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- SLIDE 2 — The Hook -->
+      <!-- ============================================================ -->
+      <section class="slide theme-ink" data-title="the-hook">
+        <div class="slide-inner layout-title">
+          <p class="eyebrow reveal">The Scenario</p>
+          <h2 class="section-title reveal d1" style="max-width:85%; font-size:clamp(1.6rem,3vw,2.4rem); line-height:1.35;">
+            "You've got a startup. Kubernetes is running. You finally get product-market fit&hellip;<br><br>
+            <span class="accent-text">and then someone says: 'Let's add AI.'</span>"
+          </h2>
+          <span class="accent-line reveal d2"></span>
+          <p class="body-text reveal d3" style="color:rgba(250,250,250,0.65); max-width:70%;">
+            Suddenly your most valuable asset is exposed through an API with almost no guardrails.
+          </p>
+        </div>
+        <aside class="slide-notes">Hit them with a real scenario they recognize. The audience should feel this in their gut. Pause after "Let's add AI" for effect. This frames the entire talk.</aside>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- SLIDE 3 — The Startup Reality -->
+      <!-- ============================================================ -->
+      <section class="slide theme-ink" data-title="startup-reality">
+        <div class="slide-inner layout-split">
+          <div>
+            <p class="eyebrow reveal">Ordinary World</p>
+            <h2 class="section-title reveal d1">The Startup<br>Default</h2>
+            <span class="accent-line reveal d2"></span>
+            <p class="body-text reveal d3">Startups optimize for speed, not safety. And it works&mdash;until scale.</p>
+          </div>
+          <div style="display:grid; gap:12px;">
+            <div class="card reveal d1">
+              <div class="card-title">Flat Networks</div>
+              <div class="card-caption">Everything talks to everything. No segmentation.</div>
+            </div>
+            <div class="card reveal d2">
+              <div class="card-title">Identity Sprawl</div>
+              <div class="card-caption">OIDC chaos, over-permissioned service accounts.</div>
+            </div>
+            <div class="card reveal d3">
+              <div class="card-title">Secrets Everywhere</div>
+              <div class="card-caption">API keys in env vars, tokens in Git history.</div>
+            </div>
+            <div class="card reveal d4">
+              <div class="card-title">Implicit Trust</div>
+              <div class="card-caption">"Inside the cluster" = trusted. No questions asked.</div>
+            </div>
+          </div>
+        </div>
+        <aside class="slide-notes">Build shared pain. The audience has lived this. Frame each failure mode as "this works... until scale." Example: "That one service account with admin? Totally fine... until your AI service gets popped."</aside>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- SLIDE 4 — Security Debt -->
+      <!-- ============================================================ -->
+      <section class="slide theme-danger" data-title="security-debt">
+        <div class="slide-inner layout-title" style="text-align:center; justify-items:center;">
+          <p class="eyebrow reveal">The Call to Adventure</p>
+          <h2 class="title reveal d1" style="max-width:85%;">Security Debt Is<br>Invisible Until It Isn't</h2>
+          <span class="accent-line long reveal d2" style="margin:0 auto; background:var(--brand-danger);"></span>
+          <div class="chip-row reveal d3" style="justify-content:center;">
+            <span class="chip"><span class="status-fail">&#10005;</span>&ensp;"We'll add mTLS later"</span>
+            <span class="chip"><span class="status-fail">&#10005;</span>&ensp;"NetworkPolicies = done"</span>
+            <span class="chip"><span class="status-fail">&#10005;</span>&ensp;"AI is just another microservice"</span>
+          </div>
+        </div>
+        <aside class="slide-notes">These are the refusals — the things teams tell themselves. Each one is a ticking time bomb. The audience will recognize themselves in at least one of these.</aside>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- SLIDE 5 — AI Multiplies Risk -->
+      <!-- ============================================================ -->
+      <section class="slide theme-danger" data-title="ai-multiplies-risk">
+        <div class="slide-inner layout-split">
+          <div>
+            <p class="eyebrow reveal">Crossing the Threshold</p>
+            <h2 class="section-title reveal d1">AI Didn't Create<br>New Problems</h2>
+            <span class="accent-line reveal d2" style="background:var(--brand-danger);"></span>
+            <p class="body-text reveal d3">It amplified the ones we ignored.</p>
+          </div>
+          <div style="display:grid; gap:12px;">
+            <div class="metric reveal d1">
+              <div class="metric-number" style="color:#FCA5A5;">Models</div>
+              <div class="metric-label">Intellectual property exposed through inference APIs</div>
+            </div>
+            <div class="metric reveal d2">
+              <div class="metric-number" style="color:#FCA5A5;">Prompts</div>
+              <div class="metric-label">Sensitive data flowing through unprotected channels</div>
+            </div>
+            <div class="metric reveal d3">
+              <div class="metric-number" style="color:#FCA5A5;">Endpoints</div>
+              <div class="metric-label">Expensive compute targets ripe for abuse</div>
+            </div>
+          </div>
+        </div>
+        <aside class="slide-notes">This is your memorable line — "AI didn't create new problems, it amplified the ones we ignored." Models are IP. Prompts are sensitive data. Inference endpoints are abuse surfaces. This section should make the audience think: "Oh... I didn't think about that."</aside>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- SLIDE 6 — AI Threat Model -->
+      <!-- ============================================================ -->
+      <section class="slide theme-ink" data-title="ai-threat-model">
+        <div class="slide-inner layout-list">
+          <div class="full-span">
+            <p class="eyebrow reveal">Tests, Allies &amp; Enemies</p>
+            <h2 class="section-title reveal d1">The AI Threat Model</h2>
+          </div>
+          <div class="full-span" style="display:grid; grid-template-columns:repeat(2,1fr); gap:14px; margin-top:8px;">
+            <div class="card reveal d1">
+              <div class="card-title" style="color:#FCA5A5;">Prompt Injection</div>
+              <div class="card-caption">Adversarial inputs that manipulate model behavior, exfiltrate data, or bypass safety filters.</div>
+            </div>
+            <div class="card reveal d2">
+              <div class="card-title" style="color:#FCA5A5;">Token Abuse</div>
+              <div class="card-caption">Unauthorized callers burning through expensive compute. One compromised pod = $10K overnight.</div>
+            </div>
+            <div class="card reveal d3">
+              <div class="card-title" style="color:#FCA5A5;">Model Scraping</div>
+              <div class="card-caption">Systematic extraction of model weights or behavior through repeated inference queries.</div>
+            </div>
+            <div class="card reveal d4">
+              <div class="card-title" style="color:#FCA5A5;">Lateral Movement</div>
+              <div class="card-caption">Compromised workloads pivoting to AI services. Flat networks make this trivial.</div>
+            </div>
+          </div>
+        </div>
+        <aside class="slide-notes">Walk through each threat with a concrete example. Prompt injection is the headline risk, but lateral movement via AI services is the one most teams miss. "Being inside the cluster should not equal trust."</aside>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- SLIDE 7 — Security as Enabler -->
+      <!-- ============================================================ -->
+      <section class="slide theme-accent" data-title="security-enabler">
+        <div class="slide-inner layout-title" style="text-align:center; justify-items:center;">
+          <p class="eyebrow reveal">Meeting the Mentor</p>
+          <h2 class="title reveal d1" style="max-width:85%;">Security Wins When It<br>Becomes Infrastructure,<br>Not Process</h2>
+          <span class="accent-line long reveal d2" style="margin:0 auto;"></span>
+          <p class="subtitle reveal d3" style="max-width:65%; text-align:center;">Guardrails, not gates. Default-secure platforms. Developer experience matters.</p>
+        </div>
+        <aside class="slide-notes">This is your differentiator — the mindset shift. Security isn't a tollgate that slows teams down. It's infrastructure that makes the secure path the easy path. Tie to your actual experience: GitOps, platform abstractions, opinionated infrastructure.</aside>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- SLIDE 8 — The Approach -->
+      <!-- ============================================================ -->
+      <section class="slide theme-accent" data-title="the-approach">
+        <div class="slide-inner layout-split">
+          <div>
+            <p class="eyebrow reveal">The Approach</p>
+            <h2 class="section-title reveal d1">Four Patterns<br>That Actually Work</h2>
+            <span class="accent-line reveal d2"></span>
+            <p class="body-text reveal d3" style="color:rgba(250,250,250,0.72);">From identity to observability&mdash;a layered defense for AI workloads in Kubernetes.</p>
+          </div>
+          <div style="display:grid; gap:14px;">
+            <div class="card reveal d1">
+              <div class="card-title"><span class="accent-text">01</span>&ensp;Identity-First Security</div>
+              <div class="card-caption">SPIFFE / mTLS — workload identity over network trust</div>
+            </div>
+            <div class="card reveal d2">
+              <div class="card-title"><span class="accent-text">02</span>&ensp;East-West Controls</div>
+              <div class="card-caption">Authorization policies + network policies with egress</div>
+            </div>
+            <div class="card reveal d3">
+              <div class="card-title"><span class="accent-text">03</span>&ensp;AI-Specific Isolation</div>
+              <div class="card-caption">Model boundaries — not all services should see the model</div>
+            </div>
+            <div class="card reveal d4">
+              <div class="card-title"><span class="accent-text">04</span>&ensp;Observability That Matters</div>
+              <div class="card-caption">Latency anomalies, token spikes, access patterns</div>
+            </div>
+          </div>
+        </div>
+        <aside class="slide-notes">Set up the four technical pillars. Each gets its own deep-dive slide. This is the roadmap for the rest of the talk. Deliver these as "actionable patterns you can implement this week."</aside>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- SLIDE 9 — Identity-First -->
+      <!-- ============================================================ -->
+      <section class="slide theme-ink" data-title="identity-first">
+        <div class="slide-inner layout-split">
+          <div>
+            <p class="eyebrow reveal">Pattern 01</p>
+            <h2 class="section-title reveal d1">Identity-First<br>Security</h2>
+            <span class="accent-line reveal d2"></span>
+            <div class="body-text reveal d3">
+              <ul>
+                <li>Workload identity &gt; network-based trust</li>
+                <li>SPIFFE provides cryptographic identity</li>
+                <li>mTLS ensures both sides prove who they are</li>
+                <li><strong>No identity = no access</strong></li>
+              </ul>
+            </div>
+          </div>
+          <div class="diagram-container reveal d2">
+            <svg class="diagram" data-media="svg" viewBox="0 0 440 340" role="img" aria-label="Identity-based access diagram">
+              <defs>
+                <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#3B82F6" stop-opacity="0.2"/><stop offset="100%" stop-color="#3B82F6" stop-opacity="0.05"/></linearGradient>
+              </defs>
+              <rect x="20" y="20" width="180" height="80" rx="14" fill="url(#g1)" stroke="#3B82F6" stroke-opacity="0.3"/>
+              <text x="110" y="55" text-anchor="middle" fill="#93C5FD" font-family="'Nunito Sans',sans-serif" font-size="13" font-weight="600">Service A</text>
+              <text x="110" y="78" text-anchor="middle" fill="#64748B" font-family="'JetBrains Mono',monospace" font-size="10">spiffe://cluster/sa-a</text>
+              <rect x="240" y="20" width="180" height="80" rx="14" fill="url(#g1)" stroke="#3B82F6" stroke-opacity="0.3"/>
+              <text x="330" y="55" text-anchor="middle" fill="#93C5FD" font-family="'Nunito Sans',sans-serif" font-size="13" font-weight="600">Model Server</text>
+              <text x="330" y="78" text-anchor="middle" fill="#64748B" font-family="'JetBrains Mono',monospace" font-size="10">spiffe://cluster/model</text>
+              <line x1="200" y1="60" x2="240" y2="60" stroke="#10B981" stroke-width="2" stroke-dasharray="6,4"/>
+              <text x="220" y="50" text-anchor="middle" fill="#6EE7B7" font-size="11" font-family="'Nunito Sans',sans-serif">mTLS</text>
+              <rect x="20" y="160" width="180" height="80" rx="14" fill="rgba(239,68,68,0.08)" stroke="#EF4444" stroke-opacity="0.3"/>
+              <text x="110" y="195" text-anchor="middle" fill="#FCA5A5" font-family="'Nunito Sans',sans-serif" font-size="13" font-weight="600">Unknown Pod</text>
+              <text x="110" y="218" text-anchor="middle" fill="#64748B" font-family="'JetBrains Mono',monospace" font-size="10">no identity</text>
+              <line x1="200" y1="200" x2="240" y2="100" stroke="#EF4444" stroke-width="2" stroke-dasharray="6,4"/>
+              <text x="230" y="145" text-anchor="middle" fill="#FCA5A5" font-size="18" font-family="'Nunito Sans',sans-serif">&#10005;</text>
+              <text x="230" y="165" text-anchor="middle" fill="#FCA5A5" font-size="10" font-family="'Nunito Sans',sans-serif">DENIED</text>
+            </svg>
+          </div>
+        </div>
+        <aside class="slide-notes">Show the simple model: Service A has identity, gets through. Unknown pod has no identity, blocked. "The question isn't where are you in the network — it's who are you." You can talk about SPIFFE/SPIRE conceptually here without running it live.</aside>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- SLIDE 10 — East-West Controls -->
+      <!-- ============================================================ -->
+      <section class="slide theme-ink" data-title="east-west-controls">
+        <div class="slide-inner layout-split">
+          <div>
+            <p class="eyebrow reveal">Pattern 02</p>
+            <h2 class="section-title reveal d1">Controlling<br>East-West Traffic</h2>
+            <span class="accent-line reveal d2"></span>
+            <div class="body-text reveal d3">
+              <ul>
+                <li>Default deny — then explicitly allow</li>
+                <li>Namespace is <strong>not</strong> a security boundary</li>
+                <li>Egress control is the most commonly missed piece</li>
+                <li>Cilium NetworkPolicy for L3/L4 + L7</li>
+              </ul>
+            </div>
+          </div>
+          <div class="reveal d2">
+            <pre><code><span class="comment"># Default deny on model server</span>
+<span class="keyword">apiVersion:</span> <span class="string">cilium.io/v2</span>
+<span class="keyword">kind:</span> <span class="string">CiliumNetworkPolicy</span>
+<span class="keyword">metadata:</span>
+  <span class="keyword">name:</span> <span class="string">default-deny-model</span>
+  <span class="keyword">namespace:</span> <span class="string">ai-demo</span>
+<span class="keyword">spec:</span>
+  <span class="keyword">endpointSelector:</span>
+    <span class="keyword">matchLabels:</span>
+      <span class="keyword">app:</span> <span class="string">model-server</span>
+  <span class="keyword">ingress:</span> <span class="string">[]</span>
+  <span class="keyword">egress:</span> <span class="string">[]</span></code></pre>
+          </div>
+        </div>
+        <aside class="slide-notes">"Network policy without egress thinking is one of the most common false wins in Kubernetes security." Keep the YAML minimal — audience should see default deny + explicit allow. That's enough. Don't overload with YAML on slides.</aside>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- SLIDE 11 — AI Isolation -->
+      <!-- ============================================================ -->
+      <section class="slide theme-success" data-title="ai-isolation">
+        <div class="slide-inner layout-split">
+          <div>
+            <p class="eyebrow reveal">Pattern 03</p>
+            <h2 class="section-title reveal d1">Isolating<br>AI Systems</h2>
+            <span class="accent-line reveal d2" style="background:var(--brand-success);"></span>
+            <div class="body-text reveal d3">
+              <ul>
+                <li>Model server in dedicated namespace</li>
+                <li>Only approved identities can call inference</li>
+                <li>Separate prompt/data flow from general traffic</li>
+                <li>Label-driven policy enforcement</li>
+              </ul>
+            </div>
+          </div>
+          <div class="reveal d2">
+            <pre><code><span class="comment"># Only trusted-client reaches the model</span>
+<span class="keyword">apiVersion:</span> <span class="string">cilium.io/v2</span>
+<span class="keyword">kind:</span> <span class="string">CiliumNetworkPolicy</span>
+<span class="keyword">metadata:</span>
+  <span class="keyword">name:</span> <span class="string">allow-trusted-to-model</span>
+  <span class="keyword">namespace:</span> <span class="string">ai-demo</span>
+<span class="keyword">spec:</span>
+  <span class="keyword">endpointSelector:</span>
+    <span class="keyword">matchLabels:</span>
+      <span class="keyword">app:</span> <span class="string">model-server</span>
+  <span class="keyword">ingress:</span>
+    - <span class="keyword">fromEndpoints:</span>
+        - <span class="keyword">matchLabels:</span>
+            <span class="keyword">app:</span> <span class="string">trusted-client</span>
+      <span class="keyword">toPorts:</span>
+        - <span class="keyword">ports:</span>
+            - <span class="keyword">port:</span> <span class="string">"8080"</span></code></pre>
+          </div>
+        </div>
+        <aside class="slide-notes">This is the "money slide" in YAML form. Only trusted namespace, only trusted client, only port 8080. "Not all services should see the model." This directly sets up the demo.</aside>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- SLIDE 12 — Observability -->
+      <!-- ============================================================ -->
+      <section class="slide theme-ink" data-title="observability">
+        <div class="slide-inner layout-split">
+          <div>
+            <p class="eyebrow reveal">Pattern 04</p>
+            <h2 class="section-title reveal d1">Observability<br>That Matters</h2>
+            <span class="accent-line reveal d2"></span>
+            <div class="body-text reveal d3">
+              <p>Controls are only real if you can verify and monitor them.</p>
+              <ul>
+                <li>Latency anomalies signal compromise</li>
+                <li>Token spikes signal abuse</li>
+                <li>Access pattern changes signal lateral movement</li>
+                <li>Hubble shows allowed &amp; denied flows</li>
+              </ul>
+            </div>
+          </div>
+          <div class="reveal d2">
+            <pre><code><span class="comment"># Watch denied traffic in real time</span>
+$ hubble observe --verdict DROPPED
+
+<span class="comment"># Output:</span>
+<span class="string">DROPPED</span> untrusted/untrusted-client
+    -> ai-demo/model-server:<span class="number">8080</span>
+    policy-verdict:<span class="string">DENIED</span>
+
+<span class="string">DROPPED</span> untrusted/attacker
+    -> ai-demo/model-server:<span class="number">8080</span>
+    policy-verdict:<span class="string">DENIED</span>
+
+<span class="comment"># This is what defenders want to see.</span></code></pre>
+          </div>
+        </div>
+        <aside class="slide-notes">This slides ties directly to the demo. Hubble's dropped flow view is powerful because it makes the policy visible. "Not just logs — latency anomalies, token spikes, access patterns." Show that security is verifiable, not just declarative.</aside>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- SLIDE 13 — Demo Intro -->
+      <!-- ============================================================ -->
+      <section class="slide theme-accent" data-title="demo-intro">
+        <div class="slide-inner layout-title" style="text-align:center; justify-items:center;">
+          <p class="eyebrow reveal">Live Demo</p>
+          <h2 class="title reveal d1">From Insecure<br>to Secure</h2>
+          <span class="accent-line long reveal d2" style="margin:0 auto;"></span>
+          <p class="subtitle reveal d3" style="max-width:60%; text-align:center;">A local Kubernetes cluster. A mock AI service. Real Cilium policies. Real results.</p>
+          <div class="chip-row reveal d4" style="justify-content:center;">
+            <span class="chip"><span style="color:#93C5FD;">kind</span></span>
+            <span class="chip"><span style="color:#93C5FD;">Cilium</span></span>
+            <span class="chip"><span style="color:#93C5FD;">Hubble</span></span>
+            <span class="chip"><span style="color:#93C5FD;">FastAPI</span></span>
+          </div>
+        </div>
+        <aside class="slide-notes">Transition to the live demo. Keep energy high. "I'm going to show you how easy it is to go from insecure to secure locally." If the demo breaks, flip to the backup slides with screenshots — keep moving like a pro.</aside>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- SLIDE 14 — Demo: Insecure State (backup slide) -->
+      <!-- ============================================================ -->
+      <section class="slide theme-danger" data-title="demo-insecure">
+        <div class="slide-inner layout-split">
+          <div>
+            <p class="eyebrow reveal">Phase 1 — The Startup Default</p>
+            <h2 class="section-title reveal d1">Everything Can Talk<br>to Everything</h2>
+            <span class="accent-line reveal d2" style="background:var(--brand-danger);"></span>
+            <p class="body-text reveal d3">No policies. No identity checks. Internal cluster access = implicit trust.</p>
+          </div>
+          <div class="reveal d2">
+            <pre><code><span class="comment"># Deploy insecure workloads</span>
+$ make deploy-insecure
+
+<span class="comment"># Test from every pod</span>
+$ make test-insecure
+
+<span class="string">trusted-client</span>   -> model-server  <span style="color:#6EE7B7">&#10003; 200 OK</span>
+<span class="string">untrusted-client</span> -> model-server  <span style="color:#6EE7B7">&#10003; 200 OK</span>
+<span class="string">attacker</span>          -> model-server  <span style="color:#6EE7B7">&#10003; 200 OK</span>
+
+<span class="comment"># Everyone gets in. That's the problem.</span></code></pre>
+          </div>
+        </div>
+        <aside class="slide-notes">"This is what happens when internal cluster access becomes implicit trust." All three succeed — that's exactly the point. The attacker pod with curl can hit your model inference endpoint. Pause here to let it sink in.</aside>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- SLIDE 15 — Demo: Secure State (backup slide) -->
+      <!-- ============================================================ -->
+      <section class="slide theme-success" data-title="demo-secure">
+        <div class="slide-inner layout-split">
+          <div>
+            <p class="eyebrow reveal">Phase 2 — Guardrails Applied</p>
+            <h2 class="section-title reveal d1">Only Approved<br>Identities Get Through</h2>
+            <span class="accent-line reveal d2" style="background:var(--brand-success);"></span>
+            <p class="body-text reveal d3">"I'm not adding friction to developers. I'm defining which identities are allowed to talk to sensitive services."</p>
+          </div>
+          <div class="reveal d2">
+            <pre><code><span class="comment"># Apply secure policies</span>
+$ make deploy-secure
+
+<span class="comment"># Test again</span>
+$ make test-secure
+
+<span class="string">trusted-client</span>   -> model-server  <span style="color:#6EE7B7">&#10003; 200 OK</span>
+<span class="string">untrusted-client</span> -> model-server  <span style="color:#FCA5A5">&#10005; TIMEOUT</span>
+<span class="string">attacker</span>          -> model-server  <span style="color:#FCA5A5">&#10005; TIMEOUT</span>
+
+<span class="comment"># From network trust to policy-driven
+# workload trust. That's the move.</span></code></pre>
+          </div>
+        </div>
+        <aside class="slide-notes">This is your strongest live moment. Trusted succeeds, untrusted and attacker both fail. "This is the move from network location trust to policy-driven workload trust." Let the terminal output tell the story.</aside>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- SLIDE 16 — Anti-Patterns -->
+      <!-- ============================================================ -->
+      <section class="slide theme-ink" data-title="anti-patterns">
+        <div class="slide-inner layout-list">
+          <div class="full-span">
+            <p class="eyebrow reveal">The Road Back</p>
+            <h2 class="section-title reveal d1">What Fails in Reality</h2>
+          </div>
+          <div class="full-span" style="display:grid; grid-template-columns:repeat(2,1fr); gap:14px; margin-top:4px;">
+            <div class="card reveal d1">
+              <div class="card-title"><span class="status-fail">&#10005;</span>&ensp;"We'll add mTLS later"</div>
+              <div class="card-caption">Later never comes. By the time you add it, you have 40 services and zero identity.</div>
+            </div>
+            <div class="card reveal d2">
+              <div class="card-title"><span class="status-fail">&#10005;</span>&ensp;"NetworkPolicies = done"</div>
+              <div class="card-caption">Ingress without egress is half a lock. DNS egress alone unlocks data exfiltration paths.</div>
+            </div>
+            <div class="card reveal d3">
+              <div class="card-title"><span class="status-fail">&#10005;</span>&ensp;"AI is just another microservice"</div>
+              <div class="card-caption">It has different threat profiles: IP exposure, cost abuse, prompt sensitivity, compute targets.</div>
+            </div>
+            <div class="card reveal d4">
+              <div class="card-title"><span class="status-fail">&#10005;</span>&ensp;"Security slows us down"</div>
+              <div class="card-caption">Only when it's bolted on. When it's infrastructure, it's invisible and instant.</div>
+            </div>
+          </div>
+        </div>
+        <aside class="slide-notes">Rapid-fire anti-patterns. Each one should land with a quick, punchy explanation. Don't dwell — move through them at pace. The audience should be nodding along recognizing their own patterns.</aside>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- SLIDE 17 — Key Takeaways -->
+      <!-- ============================================================ -->
+      <section class="slide theme-accent" data-title="takeaways">
+        <div class="slide-inner layout-split">
+          <div>
+            <p class="eyebrow reveal">Return with the Elixir</p>
+            <h2 class="section-title reveal d1">What to Do<br>Monday Morning</h2>
+            <span class="accent-line reveal d2"></span>
+          </div>
+          <div style="display:grid; gap:14px;">
+            <div class="card reveal d1">
+              <div class="card-title"><span style="color:#6EE7B7;">01</span>&ensp;Default deny. Today.</div>
+              <div class="card-caption">Start with CiliumNetworkPolicy or native NetworkPolicy. Lock down ingress and egress.</div>
+            </div>
+            <div class="card reveal d2">
+              <div class="card-title"><span style="color:#6EE7B7;">02</span>&ensp;Treat AI workloads as sensitive infrastructure</div>
+              <div class="card-caption">Dedicated namespace, explicit access, labeled boundaries. Not just another deployment.</div>
+            </div>
+            <div class="card reveal d3">
+              <div class="card-title"><span style="color:#6EE7B7;">03</span>&ensp;Make security the easy path</div>
+              <div class="card-caption">Platform abstractions, GitOps, opinionated defaults. Developers shouldn't have to think about it.</div>
+            </div>
+            <div class="card reveal d4">
+              <div class="card-title"><span style="color:#6EE7B7;">04</span>&ensp;Observe, don't just declare</div>
+              <div class="card-caption">If you can't see it working, it's not working. Hubble, traffic logs, anomaly detection.</div>
+            </div>
+          </div>
+        </div>
+        <aside class="slide-notes">These should feel achievable. "You can do all four of these this week." Frame them as Monday morning actions, not aspirational goals. The audience should leave feeling empowered, not overwhelmed.</aside>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- SLIDE 18 — Closing -->
+      <!-- ============================================================ -->
+      <section class="slide theme-ink" data-title="closing">
+        <div class="slide-inner layout-title" style="text-align:center; justify-items:center;">
+          <p class="eyebrow reveal">Closing Thought</p>
+          <h2 class="quote reveal d1" style="max-width:80%;">The goal isn't perfect security.<br><br>It's building systems where<br><span class="accent-text">secure is the default</span>&mdash;<br>and fast is still possible.</h2>
+          <span class="accent-line long reveal d2" style="margin:0 auto;"></span>
+          <div class="chip-row reveal d3" style="justify-content:center; margin-top:12px;">
+            <span class="chip">Chris Maenner</span>
+            <span class="chip">Thank You</span>
+          </div>
+        </div>
+        <aside class="slide-notes">End with this line. Let it breathe. Don't rush off stage. This is the anchor phrase that ties the whole talk together. "Security that enables speed." Pause, then thank the audience.</aside>
+      </section>
+
+    </main>
+
+    <!-- Navigation -->
+    <nav class="deck-nav">
+      <button onclick="go(-1)" aria-label="Previous slide">&larr;</button>
+      <div class="progress"><div class="progress-bar" id="progressBar"></div></div>
+      <span id="slideCount">1 / 18</span>
+      <button onclick="go(1)" aria-label="Next slide">&rarr;</button>
+      <button onclick="toggleNotes()" style="background:rgba(255,255,255,0.16); font-weight:600;">Notes</button>
+    </nav>
+
+    <div class="notes-panel" id="notesPanel">
+      <div class="notes-panel-title">Speaker Notes</div>
+      <div id="notesBody" style="white-space:pre-wrap; background:rgba(255,255,255,0.06); padding:14px; border-radius:12px;"></div>
+    </div>
+
+    <script>
+      const slides = [...document.querySelectorAll('.slide')];
+      let cur = 0;
+      const notesPanel = document.getElementById('notesPanel');
+      const notesBody = document.getElementById('notesBody');
+
+      function show(i) {
+        slides.forEach((s, idx) => s.classList.toggle('is-active', idx === i));
+        document.getElementById('slideCount').textContent = `${i + 1} / ${slides.length}`;
+        document.getElementById('progressBar').style.width = `${((i + 1) / slides.length) * 100}%`;
+        const hash = slides[i].dataset.title || '';
+        if (hash) history.replaceState(null, '', `#${hash}`);
+        updateNotes(i);
+      }
+
+      function go(d) {
+        cur = Math.max(0, Math.min(slides.length - 1, cur + d));
+        show(cur);
+      }
+
+      function toggleNotes() {
+        notesPanel.classList.toggle('is-open');
+      }
+
+      function updateNotes(i) {
+        const note = slides[i].querySelector('.slide-notes');
+        notesBody.textContent = note ? note.textContent : '(no notes for this slide)';
+      }
+
+      document.addEventListener('keydown', e => {
+        if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') { e.preventDefault(); go(1); }
+        if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); go(-1); }
+        if (e.key === 'Home') { e.preventDefault(); cur = 0; show(cur); }
+        if (e.key === 'End') { e.preventDefault(); cur = slides.length - 1; show(cur); }
+        if (e.key === 'n') toggleNotes();
+      });
+
+      // Hash navigation
+      const hash = location.hash.slice(1);
+      if (hash) {
+        const idx = slides.findIndex(s => s.dataset.title === hash);
+        if (idx >= 0) cur = idx;
+      }
+
+      // URL param for notes
+      if (new URLSearchParams(location.search).get('notes') === '1') {
+        notesPanel.classList.add('is-open');
+      }
+
+      show(cur);
+    </script>
+  </body>
+</html>
