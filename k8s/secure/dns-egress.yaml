@@ -1,0 +1,37 @@
+# Egress policy for trusted-client: allow DNS resolution AND traffic to model-server.
+#
+# "Network policy without egress thinking is one of the most common
+#  false wins in Kubernetes security."
+#
+# Both rules are required — DNS alone lets the client resolve the hostname
+# but the TCP connection to the model-server would still be blocked.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: trusted-client-egress
+  namespace: trusted
+spec:
+  endpointSelector:
+    matchLabels:
+      app: trusted-client
+  egress:
+    # Rule 1: Allow DNS resolution via kube-dns
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
+            - port: "53"
+              protocol: TCP
+    # Rule 2: Allow TCP traffic to model-server on port 8080
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: ai-demo
+            app: model-server
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP

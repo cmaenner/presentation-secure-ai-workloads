@@ -1,0 +1,26 @@
+# Allow only trusted-client to reach the model server on port 8080.
+#
+# Ybor production equivalent: PlatformApplication spec.networking.inbound.services
+# declares which services can reach this app. The operator generates:
+#   1. NetworkPolicy (namespace + pod label matching)
+#   2. AuthorizationPolicy (SPIFFE principal: cluster.local/ns/trusted/sa/trusted-client)
+#   3. PeerAuthentication (mTLS STRICT)
+# All from a single declaration in the CRD.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: allow-trusted-client-to-model
+  namespace: ai-demo
+spec:
+  endpointSelector:
+    matchLabels:
+      app: model-server
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: trusted
+            app: trusted-client
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP

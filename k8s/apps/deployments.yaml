@@ -1,0 +1,118 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: model-server
+  namespace: ai-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: model-server
+  template:
+    metadata:
+      labels:
+        app: model-server
+        security.ybor.ai/tier: sensitive
+    spec:
+      serviceAccountName: model-server
+      containers:
+        - name: model-server
+          image: model-server:demo
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          env:
+            - name: MODEL_NAME
+              value: demo-llm-v1
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: model-server
+  namespace: ai-demo
+spec:
+  selector:
+    app: model-server
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trusted-client
+  namespace: trusted
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: trusted-client
+  template:
+    metadata:
+      labels:
+        app: trusted-client
+        security.ybor.ai/access: approved
+    spec:
+      serviceAccountName: trusted-client
+      containers:
+        - name: trusted-client
+          image: trusted-client:demo
+          imagePullPolicy: IfNotPresent
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: untrusted-client
+  namespace: untrusted
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: untrusted-client
+  template:
+    metadata:
+      labels:
+        app: untrusted-client
+        security.ybor.ai/access: denied
+    spec:
+      serviceAccountName: untrusted-client
+      containers:
+        - name: untrusted-client
+          image: untrusted-client:demo
+          imagePullPolicy: IfNotPresent
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: attacker
+  namespace: untrusted
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: attacker
+  template:
+    metadata:
+      labels:
+        app: attacker
+        security.ybor.ai/access: denied
+    spec:
+      serviceAccountName: attacker
+      containers:
+        - name: attacker
+          image: curlimages/curl:8.7.1
+          imagePullPolicy: IfNotPresent
+          command: ["sleep", "3600"]
