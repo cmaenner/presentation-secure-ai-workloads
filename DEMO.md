@@ -33,6 +33,16 @@ You do not need a real LLM for the first version. A lightweight mock inference A
 - `kubectl`
 - `helm`
 
+## Ybor Technology Code Repositories
+- ~/orgs/p6m-run/addon-operator
+- ~/orgs/p6m-run/github-operator
+- ~/orgs/p6m-run/installation-operator
+- ~/orgs/p6m-run/platform-agent-operator
+- ~/orgs/p6m-run/platform-application-operator
+- ~/orgs/p6m-run/platform-cluster-operator
+- ~/orgs/p6m-run/platform-edge-operator
+- ~/orgs/p6m-run/platform-organization-operator
+
 ## Security/data plane
 Choose one primary path for the live talk:
 

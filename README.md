@@ -1,230 +1,224 @@
 # Securing AI Workloads in Kubernetes — Demo
 
-This repository contains the live demo used in the talk:
+This repository contains the live demo and slide deck for:
 
-> **“Securing AI Workloads in Kubernetes: Lessons from Scaling Startups”**
+> **"Securing AI Workloads in Kubernetes: Lessons from Scaling Startups"**
+> BSides Charm 2025 — Chris Maenner
 
-It is designed to show, in a simple and reproducible way, how startups typically deploy insecure workloads—and how to evolve that into a secure, identity- and policy-driven architecture **without slowing down development velocity**.
+It shows, in a simple and reproducible way, how startups typically deploy insecure workloads — and how to evolve that into a secure, policy-driven architecture **without slowing down development velocity**.
 
 ---
 
-# 🧠 What This Demo Teaches
-
-This demo walks through a real-world progression:
+## What This Demo Teaches
 
 ### 1. The Startup Default (Insecure)
-- Flat network
+- Flat network — everything talks to everything
 - Implicit trust inside the cluster
-- Any workload can access sensitive services
+- Any workload can access sensitive AI services
 
 ### 2. The Problem
-- AI model endpoints become high-value targets
+- AI model endpoints are high-value targets
 - Prompts may contain sensitive data
 - Internal services can be abused or compromised
 
 ### 3. The Fix (Secure by Default)
-- Default deny network posture
+- Default deny network posture via CiliumNetworkPolicy
 - Explicit workload-to-workload access
-- Policy-driven communication
-- Observability of allowed and denied traffic
+- Policy-driven communication with label matching
+- Observability of allowed and denied traffic via Hubble
 
 ---
 
-# 🧱 Architecture Overview
+## Architecture
 
-The demo simulates a simple AI platform:
-
-- **model-server** → Represents an AI inference service
-- **trusted-client** → A legitimate internal service
-- **untrusted-client** → A service that should NOT have access
-- **attacker** → A generic pod attempting lateral movement
-
+```
 Namespaces:
+  ai-demo     →  model-server (mock AI inference, FastAPI)
+  trusted     →  trusted-client (approved workload)
+  untrusted   →  untrusted-client + attacker (denied workloads)
 
-- `ai-demo` → sensitive AI workload
-- `trusted` → approved workloads
-- `untrusted` → non-approved workloads
-
----
-
-# ⚙️ Requirements
-
-You will need:
-
-- Docker
-- `kind`
-- `kubectl`
-- `helm`
-- (Optional but recommended) `cilium` CLI
+Security labels:
+  security.ybor.ai/tier: sensitive      (model-server)
+  security.ybor.ai/access: approved     (trusted-client)
+  security.ybor.ai/access: denied       (untrusted-client, attacker)
+```
 
 ---
 
-# 🚀 Quick Start
+## Requirements
 
-## 1. Create Cluster
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+- [kind](https://kind.sigs.k8s.io/) — `brew install kind`
+- [kubectl](https://kubernetes.io/docs/tasks/tools/) — `brew install kubectl`
+- [helm](https://helm.sh/) — `brew install helm`
+- [Cilium CLI](https://docs.cilium.io/en/stable/gettingstarted/k8s-install-default/#install-the-cilium-cli) (optional, for `hubble observe`)
+
+---
+
+## Quick Start
+
+### 1. Bootstrap (run once, ~5 min)
+
+Creates a kind cluster with Cilium CNI, builds container images, and loads them.
 
 ```bash
-make create-cluster
+make bootstrap
+```
 
-2. Install Cilium
+### 2. Deploy Insecure Environment
 
-make install-cilium
-
-3. Build and Load Images
-
-make build-images
-make load-images
-
-4. Deploy Insecure Environment
-
+```bash
 make deploy-insecure
+```
 
-5. Test Insecure Behavior
+### 3. Test Insecure Behavior
 
+```bash
 make test-insecure
+```
 
-Expected Result
+**Expected result — all workloads reach the model:**
 
-All workloads can access the model:
-	•	✅ trusted-client → allowed
-	•	❌ untrusted-client → also allowed (bad)
-	•	❌ attacker → also allowed (very bad)
+```
+trusted-client   → model-server  ✅ 200 OK
+untrusted-client → model-server  ✅ 200 OK  (bad)
+attacker         → model-server  ✅ 200 OK  (very bad)
+```
 
-This represents the default startup reality.
+### 4. Apply Security Controls
 
-⸻
-
-🔐 Apply Security Controls
-
-Deploy Secure Configuration
-
+```bash
 make deploy-secure
+```
 
-Test Secure Behavior
+### 5. Test Secure Behavior
 
+```bash
 make test-secure
+```
 
-Expected Result
-	•	✅ trusted-client → allowed
-	•	🚫 untrusted-client → denied
-	•	🚫 attacker → denied
+**Expected result — only trusted-client gets through:**
 
-This demonstrates:
+```
+trusted-client   → model-server  ✅ 200 OK
+untrusted-client → model-server  🚫 Connection timed out
+attacker         → model-server  🚫 Connection timed out
+```
 
-Workload identity + policy > network location trust
+### 6. Observe with Hubble
 
-⸻
+```bash
+make hubble-observe
+```
 
-🔍 Observability (Hubble)
+You should see `DROPPED` verdicts from the untrusted namespace.
 
-Observe traffic in real time:
+### 7. Reset
 
-cilium hubble port-forward &
-hubble observe
+```bash
+make reset-demo
+```
 
-View Dropped Traffic
+---
 
-hubble observe --verdict DROPPED
+## Repository Structure
 
-You should see:
-	•	denied connections from untrusted namespace
-	•	enforcement of policy at runtime
+```
+cluster/                 Kind + Cilium setup
+  kind-config.yaml         2 workers, CNI disabled for Cilium
+  cilium-values.yaml       Hubble enabled, kind-compatible settings
+  bootstrap.sh             Full cluster bootstrap script
 
-⸻
+apps/                    Application source code
+  model-server/            FastAPI mock inference API (POST /infer, GET /healthz)
+  trusted-client/          Approved client (python + curl)
+  untrusted-client/        Denied client (python + curl)
+  attacker/                Generic pod with curl
 
-🧪 Demo Flow (For Presentations)
+k8s/                     Kubernetes manifests
+  base/                    Namespaces + ServiceAccounts
+  apps/                    All deployment + service manifests
+  insecure/                Kustomize overlay — no policies
+  secure/                  Kustomize overlay — CiliumNetworkPolicy
+    default-deny-ingress-egress.yaml
+    allow-trusted-client-to-model.yaml
+    dns-egress.yaml
+  observability/           Hubble scripts + sample queries
 
-Phase 1 — Insecure
+scripts/                 Helper scripts for demo flow
+  build-images.sh          Build all container images
+  load-images-kind.sh      Load images into kind cluster
+  deploy-insecure.sh       Deploy without policies
+  deploy-secure.sh         Deploy with Cilium policies
+  test-insecure.sh         Verify all clients can reach model
+  test-secure.sh           Verify only trusted client succeeds
+  reset-demo.sh            Clean up all workloads
 
-make deploy-insecure
-make test-insecure
+docs/                    Documentation
+  architecture.md          Manual demo vs Ybor platform comparison
+  demo-script.md           Step-by-step live demo script
+  speaker-notes.md         Timing and delivery notes
 
-Narrative:
+talk-tracks/             Per-phase narration scripts
+```
 
-“Everything can talk to everything. This is where most startups start.”
+---
 
-⸻
+## Make Targets
 
-Phase 2 — Secure
+| Target | What it does |
+|--------|-------------|
+| `make bootstrap` | Full setup: cluster + Cilium + images (~5 min) |
+| `make create-cluster` | Create kind cluster only |
+| `make delete-cluster` | Delete the kind cluster |
+| `make install-cilium` | Install Cilium + wait for readiness |
+| `make build-images` | Build all Docker images |
+| `make load-images` | Load images into kind |
+| `make deploy-insecure` | Deploy workloads without policies |
+| `make deploy-secure` | Deploy workloads with CiliumNetworkPolicy |
+| `make test-insecure` | Test: all clients succeed |
+| `make test-secure` | Test: only trusted-client succeeds |
+| `make reset-demo` | Remove all workloads and policies |
+| `make hubble-observe` | Start Hubble and show dropped traffic |
+| `make status` | Show nodes, pods, and policies |
 
-make deploy-secure
-make test-secure
+---
 
-Narrative:
+## Key Concepts Demonstrated
 
-“We introduce guardrails—not friction. Only approved identities can access sensitive workloads.”
+- Default deny networking
+- Explicit workload-to-workload authorization
+- Namespace is NOT a security boundary
+- East-west traffic control with Cilium
+- Egress control (DNS + service-level)
+- Observability of service communication
+- AI workloads as sensitive infrastructure
 
-⸻
+---
 
-Phase 3 — Observe
+## Slide Deck
 
-hubble observe --verdict DROPPED
+The presentation deck is in `.claude/decks/secure-ai-workloads/index.html`. Open it directly in a browser:
 
-Narrative:
+```bash
+open .claude/decks/secure-ai-workloads/index.html
+```
 
-“Controls are only real if you can see them working.”
+Navigate with arrow keys. Press `n` for speaker notes.
 
-⸻
+---
 
-📁 Repository Structure
+## For Talk Preparation
 
-cluster/        → kind + Cilium setup
-apps/           → model + client workloads
-k8s/            → base, insecure, and secure manifests
-scripts/        → helper scripts for demo flow
-docs/           → speaker notes, diagrams, screenshots
-talk-tracks/    → narrative for presenting demo live
+- Use `make` commands only — no long typing live
+- Pre-build images before presenting (`make bootstrap`)
+- Keep one terminal per phase
+- Have screenshots ready as backup (slides 14-15 have expected output)
+- Run `make status` to verify health before starting
 
+---
 
-⸻
+## Closing Thought
 
-🧠 Key Concepts Demonstrated
-	•	Default deny networking
-	•	Explicit workload-to-workload authorization
-	•	Namespace is NOT a security boundary
-	•	East-west traffic control
-	•	Observability of service communication
-	•	AI workloads as sensitive infrastructure
-
-⸻
-
-⚠️ Anti-Patterns This Demo Highlights
-	•	“Everything inside the cluster is trusted”
-	•	Over-permissioned service accounts
-	•	No egress control
-	•	Treating AI services like normal microservices
-	•	Adding security “later”
-
-⸻
-
-🧩 Extending This Demo
-
-Future enhancements:
-	•	SPIFFE/SPIRE for workload identity
-	•	Istio mTLS + AuthorizationPolicy
-	•	Prompt-level protections
-	•	Token usage monitoring
-	•	Rate limiting for inference endpoints
-
-⸻
-
-🎤 For Talk Preparation
-
-If you’re using this for a presentation:
-	•	Use make commands only (no long typing live)
-	•	Pre-build images before presenting
-	•	Keep one terminal per phase
-	•	Have screenshots ready as backup
-
-⸻
-
-🙌 Final Thought
-
-Secure systems are not built by adding controls later.
-They are built by making secure the default path.
-
-⸻
-
-📄 License
-
-MIT (or update based on your preference)
+> The goal isn't perfect security. It's building systems where
+> secure is the default — and fast is still possible.
