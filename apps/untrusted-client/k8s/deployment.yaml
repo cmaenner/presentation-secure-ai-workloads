@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: untrusted-client
+  namespace: untrusted
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: untrusted-client
+  template:
+    metadata:
+      labels:
+        app: untrusted-client
+        security.ybor.ai/access: denied
+    spec:
+      serviceAccountName: untrusted-client
+      containers:
+        - name: untrusted-client
+          image: untrusted-client:demo
+          imagePullPolicy: IfNotPresent

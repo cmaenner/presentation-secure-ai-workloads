@@ -1,0 +1,23 @@
+# Cilium configuration for kind cluster
+# kubeProxyReplacement is required when kubeProxyMode: "none" in kind config
+kubeProxyReplacement: true
+
+# Required for kind compatibility — restricts socket LB to host namespace
+socketLB:
+  hostNamespaceOnly: true
+
+ipam:
+  mode: kubernetes
+
+hubble:
+  enabled: true
+  relay:
+    enabled: true
+  ui:
+    enabled: true
+
+operator:
+  replicas: 1
+
+k8sServiceHost: secure-ai-demo-control-plane
+k8sServicePort: 6443
