@@ -1,8 +1,13 @@
-# Default deny all traffic to the model server.
+# Default deny egress from the model server.
+#
+# In Cilium, applying any ingress rule to an endpoint automatically
+# denies all other ingress not explicitly allowed. The allow-trusted
+# policy handles that. This policy locks down egress so the model
+# server cannot initiate outbound connections.
 #
 # Ybor production equivalent: setting istio_fail_closed=true on the
 # PlatformApplication operator auto-generates both a NetworkPolicy
-# (default-deny ingress) and an AuthorizationPolicy (ALLOW only for
+# (default-deny) and an AuthorizationPolicy (ALLOW only for
 # declared inbound.services principals via SPIFFE identity).
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
@@ -13,5 +18,6 @@ spec:
   endpointSelector:
     matchLabels:
       app: model-server
-  ingress: []
-  egress: []
+  egressDeny:
+    - toEntities:
+        - all
