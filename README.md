@@ -3,7 +3,7 @@
 This repository contains the live demo and slide deck for:
 
 > **"Securing AI Workloads in Kubernetes: Lessons from Scaling Startups"**
-> BSides Charm 2025 — Chris Maenner
+> BSides Charm 2026 — Chris Maenner
 
 It shows, in a simple and reproducible way, how startups typically deploy insecure workloads — and how to evolve that into a secure, policy-driven architecture **without slowing down development velocity**.
 
