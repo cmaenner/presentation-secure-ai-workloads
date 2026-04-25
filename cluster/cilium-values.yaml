@@ -19,5 +19,5 @@ hubble:
 operator:
   replicas: 1
 
-k8sServiceHost: secure-ai-demo-control-plane
-k8sServicePort: 6443
+# k8sServiceHost and k8sServicePort are set via --set at install time
+# to match the cluster name (e.g., insecure-demo-control-plane)

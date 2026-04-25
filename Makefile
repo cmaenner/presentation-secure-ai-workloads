@@ -1,40 +1,18 @@
-CLUSTER_NAME = secure-ai-demo
+.PHONY: bootstrap build-images deploy deploy-insecure deploy-secure \
+        test test-insecure test-secure \
+        reset-demo delete-clusters hubble-observe status
 
-.PHONY: bootstrap create-cluster delete-cluster install-cilium \
-        build-images load-images \
-        deploy-insecure deploy-secure test-insecure test-secure \
-        reset-demo hubble-observe status
+# === Pre-talk setup (run once, ~8 min) ===
 
-# === Pre-talk setup (run once) ===
-
-bootstrap: create-cluster install-cilium build-images load-images
-	@echo ""
-	@echo "==> Cluster fully bootstrapped."
-	@echo "    Run 'make deploy-insecure' to start the demo."
-
-create-cluster:
-	kind create cluster --config cluster/kind-config.yaml
-
-delete-cluster:
-	kind delete cluster --name $(CLUSTER_NAME)
-
-install-cilium:
-	helm repo add cilium https://helm.cilium.io 2>/dev/null || true
-	helm repo update cilium
-	helm install cilium cilium/cilium \
-	  --namespace kube-system \
-	  --values cluster/cilium-values.yaml \
-	  --wait --timeout 5m
-	kubectl -n kube-system rollout status daemonset/cilium --timeout=120s
-	kubectl -n kube-system rollout status deployment/coredns --timeout=120s
+bootstrap:
+	./cluster/bootstrap.sh
 
 build-images:
 	./scripts/build-images.sh
 
-load-images:
-	./scripts/load-images-kind.sh
+# === Deploy workloads to both clusters ===
 
-# === Demo flow ===
+deploy: deploy-insecure deploy-secure
 
 deploy-insecure:
 	./scripts/deploy-insecure.sh
@@ -42,30 +20,46 @@ deploy-insecure:
 deploy-secure:
 	./scripts/deploy-secure.sh
 
+# === Demo tests ===
+
+test: test-insecure test-secure
+
 test-insecure:
 	./scripts/test-insecure.sh
 
 test-secure:
 	./scripts/test-secure.sh
 
+# === Cleanup ===
+
 reset-demo:
 	./scripts/reset-demo.sh
 
-# === Observability ===
+delete-clusters:
+	kind delete cluster --name insecure-demo 2>/dev/null || true
+	kind delete cluster --name secure-demo 2>/dev/null || true
+
+# === Observability (secure cluster) ===
 
 hubble-observe:
-	cilium hubble port-forward &
+	kubectl --context kind-secure-demo -n kube-system port-forward svc/hubble-ui 12000:80 &
+	@echo ""
+	@echo "==> Hubble UI: http://localhost:12000/?namespace=ai-demo"
+	@echo "==> Select 'ai-demo' namespace in the dropdown."
+
+hubble-cli:
+	cilium hubble port-forward --context kind-secure-demo &
 	sleep 2
 	hubble observe --verdict DROPPED --namespace ai-demo
 
-# === Utility ===
+# === Status ===
 
 status:
-	@echo "=== Nodes ==="
-	@kubectl get nodes
+	@echo "=== INSECURE CLUSTER ==="
+	@kubectl --context kind-insecure-demo get pods -A -l 'app in (model-server,trusted-client,untrusted-client,attacker)' 2>/dev/null || echo "(cluster not running)"
 	@echo ""
-	@echo "=== Demo Pods ==="
-	@kubectl get pods -A -l 'app in (model-server,trusted-client,untrusted-client,attacker)'
+	@echo "=== SECURE CLUSTER ==="
+	@kubectl --context kind-secure-demo get pods -A -l 'app in (model-server,trusted-client,untrusted-client,attacker)' 2>/dev/null || echo "(cluster not running)"
 	@echo ""
-	@echo "=== Cilium Policies ==="
-	@kubectl get ciliumnetworkpolicies -A 2>/dev/null || echo "(none)"
+	@echo "=== Cilium Policies (secure) ==="
+	@kubectl --context kind-secure-demo get ciliumnetworkpolicies -A 2>/dev/null || echo "(none)"

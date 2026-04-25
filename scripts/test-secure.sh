@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
+CTX="kind-secure-demo"
+
+echo "=== Testing SECURE cluster ($CTX) ==="
+echo ""
 
 echo "== trusted client calling model-server =="
-kubectl exec -n trusted deploy/trusted-client -- \
+kubectl --context "$CTX" exec -n trusted deploy/trusted-client -- \
   curl -s --connect-timeout 3 --max-time 5 \
   http://model-server.ai-demo.svc.cluster.local:8080/infer \
   -H 'Content-Type: application/json' \
@@ -10,7 +14,7 @@ kubectl exec -n trusted deploy/trusted-client -- \
 
 echo
 echo "== untrusted client calling model-server =="
-kubectl exec -n untrusted deploy/untrusted-client -- \
+kubectl --context "$CTX" exec -n untrusted deploy/untrusted-client -- \
   curl -v --connect-timeout 3 --max-time 5 \
   http://model-server.ai-demo.svc.cluster.local:8080/infer \
   -H 'Content-Type: application/json' \
@@ -18,7 +22,7 @@ kubectl exec -n untrusted deploy/untrusted-client -- \
 
 echo
 echo "== attacker calling model-server =="
-kubectl exec -n untrusted deploy/attacker -- \
+kubectl --context "$CTX" exec -n untrusted deploy/attacker -- \
   curl -v --connect-timeout 3 --max-time 5 \
   http://model-server.ai-demo.svc.cluster.local:8080/infer \
   -H 'Content-Type: application/json' \
@@ -26,4 +30,5 @@ kubectl exec -n untrusted deploy/attacker -- \
 
 echo
 echo ""
-echo "==> Trusted succeeded. Untrusted and attacker denied. That's the fix."
+echo "==> Trusted succeeded. Untrusted and attacker denied."
+echo "    Security was the default. Not bolted on."
