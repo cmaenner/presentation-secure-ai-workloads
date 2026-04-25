@@ -1,35 +1,35 @@
 # Securing AI Workloads in Kubernetes — Demo
 
-This repository contains the live demo and slide deck for:
+This repository contains the live demo for:
 
 > **"Securing AI Workloads in Kubernetes: Lessons from Scaling Startups"**
 > BSides Charm 2026 — Chris Maenner
 
-It shows, in a simple and reproducible way, how startups typically deploy insecure workloads — and how to evolve that into a secure, policy-driven architecture **without slowing down development velocity**.
+It uses **two separate Kubernetes clusters** — one insecure, one secure from birth — to show the difference between bolting on security after deployment and making secure the default.
 
 ---
 
 ## What This Demo Teaches
 
-### 1. The Startup Default (Insecure)
+### 1. The Startup Default (Insecure Cluster)
 - Flat network — everything talks to everything
 - Implicit trust inside the cluster
 - Any workload can access sensitive AI services
 
-### 2. The Problem
-- AI model endpoints are high-value targets
-- Prompts may contain sensitive data
-- Internal services can be abused or compromised
-
-### 3. The Fix (Secure by Default)
+### 2. Secure by Default (Secure Cluster)
+- Same workloads, same code — but policies ship with infrastructure
 - Default deny network posture via CiliumNetworkPolicy
 - Explicit workload-to-workload access
-- Policy-driven communication with label matching
 - Observability of allowed and denied traffic via Hubble
+
+### 3. The Difference
+Three CiliumNetworkPolicy files. That's it. The secure cluster was born with them. Security wasn't bolted on — it was the default.
 
 ---
 
 ## Architecture
+
+Both clusters run identical workloads:
 
 ```
 Namespaces:
@@ -41,6 +41,10 @@ Security labels:
   security.ybor.ai/tier: sensitive      (model-server)
   security.ybor.ai/access: approved     (trusted-client)
   security.ybor.ai/access: denied       (untrusted-client, attacker)
+
+Clusters:
+  insecure-demo  →  no policies (the startup default)
+  secure-demo    →  CiliumNetworkPolicy enforced from the start
 ```
 
 ---
@@ -57,27 +61,29 @@ Security labels:
 
 ## Quick Start
 
-### 1. Bootstrap (run once, ~5 min)
+### 1. Bootstrap (run once, ~8 min)
 
-Creates a kind cluster with Cilium CNI, builds container images, and loads them.
+Creates both kind clusters with Cilium CNI, builds container images, and loads them into each cluster.
 
 ```bash
 make bootstrap
 ```
 
-### 2. Deploy Insecure Environment
+### 2. Deploy Workloads
+
+Deploys the same workloads to both clusters. The insecure cluster gets no policies. The secure cluster gets CiliumNetworkPolicy enforced from the start.
 
 ```bash
-make deploy-insecure
+make deploy
 ```
 
-### 3. Test Insecure Behavior
+### 3. Test Both Clusters
 
 ```bash
-make test-insecure
+make test
 ```
 
-**Expected result — all workloads reach the model:**
+**Insecure cluster — all workloads reach the model:**
 
 ```
 trusted-client   → model-server  ✅ 200 OK
@@ -85,19 +91,7 @@ untrusted-client → model-server  ✅ 200 OK  (bad)
 attacker         → model-server  ✅ 200 OK  (very bad)
 ```
 
-### 4. Apply Security Controls
-
-```bash
-make deploy-secure
-```
-
-### 5. Test Secure Behavior
-
-```bash
-make test-secure
-```
-
-**Expected result — only trusted-client gets through:**
+**Secure cluster — only trusted-client gets through:**
 
 ```
 trusted-client   → model-server  ✅ 200 OK
@@ -105,18 +99,29 @@ untrusted-client → model-server  🚫 Connection timed out
 attacker         → model-server  🚫 Connection timed out
 ```
 
-### 6. Observe with Hubble
+### 4. Observe with Hubble UI (secure cluster)
 
 ```bash
 make hubble-observe
 ```
 
-You should see `DROPPED` verdicts from the untrusted namespace.
+Open `http://localhost:12000/?namespace=ai-demo` to see the flow map. Select the `ai-demo` namespace.
 
-### 7. Reset
+### 5. Cleanup
 
 ```bash
-make reset-demo
+make delete-clusters
+```
+
+---
+
+## Live Demo Flow
+
+For the presentation, split the test into two commands for dramatic effect:
+
+```bash
+make test-insecure    # "Everyone gets in. That's the problem."
+make test-secure      # "Security was the default. Not bolted on."
 ```
 
 ---
@@ -125,9 +130,10 @@ make reset-demo
 
 ```
 cluster/                 Kind + Cilium setup
-  kind-config.yaml         2 workers, CNI disabled for Cilium
-  cilium-values.yaml       Hubble enabled, kind-compatible settings
-  bootstrap.sh             Full cluster bootstrap script
+  kind-config-insecure.yaml  Insecure cluster (1 CP + 1 worker)
+  kind-config-secure.yaml    Secure cluster (1 CP + 1 worker)
+  cilium-values.yaml         Shared Cilium config (Hubble enabled)
+  bootstrap.sh               Bootstraps both clusters
 
 apps/                    Application source code
   model-server/            FastAPI mock inference API (POST /infer, GET /healthz)
@@ -147,12 +153,12 @@ k8s/                     Kubernetes manifests
 
 scripts/                 Helper scripts for demo flow
   build-images.sh          Build all container images
-  load-images-kind.sh      Load images into kind cluster
-  deploy-insecure.sh       Deploy without policies
-  deploy-secure.sh         Deploy with Cilium policies
-  test-insecure.sh         Verify all clients can reach model
-  test-secure.sh           Verify only trusted client succeeds
-  reset-demo.sh            Clean up all workloads
+  load-images-kind.sh      Load images into both clusters
+  deploy-insecure.sh       Deploy to insecure cluster (no policies)
+  deploy-secure.sh         Deploy to secure cluster (with policies)
+  test-insecure.sh         Test insecure cluster — all clients succeed
+  test-secure.sh           Test secure cluster — only trusted succeeds
+  reset-demo.sh            Clean up workloads on both clusters
 
 docs/                    Documentation
   architecture.md          Manual demo vs Ybor platform comparison
@@ -168,24 +174,25 @@ talk-tracks/             Per-phase narration scripts
 
 | Target | What it does |
 |--------|-------------|
-| `make bootstrap` | Full setup: cluster + Cilium + images (~5 min) |
-| `make create-cluster` | Create kind cluster only |
-| `make delete-cluster` | Delete the kind cluster |
-| `make install-cilium` | Install Cilium + wait for readiness |
+| `make bootstrap` | Full setup: both clusters + Cilium + images (~8 min) |
 | `make build-images` | Build all Docker images |
-| `make load-images` | Load images into kind |
-| `make deploy-insecure` | Deploy workloads without policies |
-| `make deploy-secure` | Deploy workloads with CiliumNetworkPolicy |
-| `make test-insecure` | Test: all clients succeed |
-| `make test-secure` | Test: only trusted-client succeeds |
-| `make reset-demo` | Remove all workloads and policies |
-| `make hubble-observe` | Start Hubble and show dropped traffic |
-| `make status` | Show nodes, pods, and policies |
+| `make deploy` | Deploy workloads to both clusters |
+| `make deploy-insecure` | Deploy to insecure cluster only |
+| `make deploy-secure` | Deploy to secure cluster only |
+| `make test` | Test both clusters back-to-back |
+| `make test-insecure` | Test insecure cluster — all clients succeed |
+| `make test-secure` | Test secure cluster — only trusted succeeds |
+| `make reset-demo` | Remove workloads from both clusters |
+| `make delete-clusters` | Delete both kind clusters |
+| `make hubble-observe` | Open Hubble UI for secure cluster |
+| `make hubble-cli` | Show dropped traffic via Hubble CLI |
+| `make status` | Show pods and policies on both clusters |
 
 ---
 
 ## Key Concepts Demonstrated
 
+- Secure by default — policies ship with infrastructure, not after
 - Default deny networking
 - Explicit workload-to-workload authorization
 - Namespace is NOT a security boundary
@@ -196,25 +203,13 @@ talk-tracks/             Per-phase narration scripts
 
 ---
 
-## Slide Deck
-
-The presentation deck is in `.claude/decks/secure-ai-workloads/index.html`. Open it directly in a browser:
-
-```bash
-open .claude/decks/secure-ai-workloads/index.html
-```
-
-Navigate with arrow keys. Press `n` for speaker notes.
-
----
-
 ## For Talk Preparation
 
-- Use `make` commands only — no long typing live
-- Pre-build images before presenting (`make bootstrap`)
-- Keep one terminal per phase
-- Have screenshots ready as backup (slides 14-15 have expected output)
-- Run `make status` to verify health before starting
+- Run `make bootstrap && make deploy` before the talk (~8 min)
+- Run `make status` to verify both clusters are healthy
+- Use `make test-insecure` and `make test-secure` separately for dramatic effect
+- Use `make hubble-observe` to show Hubble UI on the secure cluster
+- Have a backup terminal ready in case Docker restarts (`make bootstrap` recovers in ~8 min)
 
 ---
 
