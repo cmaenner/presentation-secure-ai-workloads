@@ -3,7 +3,6 @@
 This repository contains the live demo for:
 
 > **"Securing AI Workloads in Kubernetes: Lessons from Scaling Startups"**
-> BSides Charm 2026 — Chris Maenner
 
 It uses **two separate Kubernetes clusters** — one insecure, one secure from birth — to show the difference between bolting on security after deployment and making secure the default.
 
