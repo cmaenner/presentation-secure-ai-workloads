@@ -1,4 +1,6 @@
-# Securing AI Workloads in Kubernetes — Demo
+# Securing AI Workloads in Kubernetes
+
+This repository accompanies my conference talk, “Securing AI Workloads in Kubernetes: Lessons from Scaling Startups.” It includes the presentation, live demonstrations, and production-inspired examples showing how to build AI platforms using identity-first security, workload isolation, service meshes, observability, and GitOps. Whether you’re running startups or enterprise Kubernetes clusters, these patterns help enable developer velocity without sacrificing security.
 
 This repository contains the live demo for:
 
